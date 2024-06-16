@@ -1,0 +1,6 @@
+/kernel/target
+/kernel/kernel
+/ovmf
+/iosevka
+/limine
+*.iso
