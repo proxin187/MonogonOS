@@ -47,14 +47,51 @@ static HHDM_REQUEST: HhdmRequest = HhdmRequest::new();
 #[used]
 static STACK_SIZE: StackSizeRequest = StackSizeRequest::new().with_size(0x32000);
 
+// TODO: i think we just need to continue and develop it as a single process os
+
 #[no_mangle]
 pub extern "C" fn print_int(int: u64) {
     debug::write(format_args!("[debug] int: 0x{:x?}\n", int));
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn test() {
+    asm!(
+        "add rax, 1",
+        "sub rax, 1",
+    );
+
+    /*
+    if rax >= 1 {
+        asm!(
+            "sub rax, 1",
+        );
+    } else {
+        asm!(
+            "add rax, 1",
+        );
+    }
+    */
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn proc1() {
+    asm!(
+        "mov rax, 1",
+        "mov rbx, 2",
+        "mov rcx, 3",
+        "mov rdx, 4",
+        "mov rsi, 5",
+        "mov rdi, 6",
+        "mov r8, 8",
+        "mov r9, 9",
+        "mov r10, 10",
+        "mov r11, 11",
+    );
+
     loop {
+        test();
+
         /*
         asm!(
             "lea rax, [rip]",
@@ -65,18 +102,8 @@ pub unsafe extern "C" fn proc1() {
             "call print_int",
         );
         */
-        /*
-        asm!(
-            "mov rax, 1",
-            "mov rbx, 2",
-            "mov rcx, 3",
-            "mov rdx, 4",
-            "mov rsi, 5",
-            "mov rdi, 6",
-        );
-        */
 
-        debug::write(format_args!("[debug] proc1 is running\n"));
+        // debug::write(format_args!("[debug] proc1 is running\n"));
     }
 }
 

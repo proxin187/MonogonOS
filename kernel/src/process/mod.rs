@@ -1,4 +1,6 @@
-use crate::debug;
+use crate::allocator;
+
+use core::alloc::{GlobalAlloc, Layout};
 
 use spin::Mutex;
 
@@ -16,6 +18,9 @@ pub enum State {
 
 // TODO: the problem with the crash when the instruction pointer is for some reason set to 0x296 is
 // most likely a result of us not saving r8, r9, r10 and r11
+
+// TODO: never mind it is actually most likely from messed up stack pointer
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Context {
     pub rax: i64,
@@ -27,6 +32,10 @@ pub struct Context {
     pub rsi: i64,
     pub rdi: i64,
     pub rip: i64,
+    pub r8: i64,
+    pub r9: i64,
+    pub r10: i64,
+    pub r11: i64,
 }
 
 impl Context {
@@ -42,6 +51,10 @@ impl Context {
             rsi: 0,
             rdi: 0,
             rip: 0,
+            r8: 0,
+            r9: 0,
+            r10: 0,
+            r11: 0,
         }
     }
 }
@@ -80,14 +93,28 @@ impl ProcessHandler {
         }
     }
 
-    pub fn spawn(&mut self, addr: i64) {
+    pub unsafe fn spawn(&mut self, addr: i64) {
+        let stack = allocator::ALLOC.alloc(Layout::new::<[u64; 100]>());
+
         self.table[self.pid] = Process::new();
 
-        self.table[self.pid].state = State::Waiting;
+        self.table[self.pid].context.rsp = stack as i64;
         self.table[self.pid].context.rip = addr;
         self.table[self.pid].base = addr;
 
+        self.table[self.pid].state = State::Waiting;
+
         self.pid += 1;
+    }
+}
+
+pub fn for_each<F>(f: F) where F: Fn(&mut Process) {
+    unsafe {
+        let mut lock = PROCESS.lock();
+
+        for proc in &mut lock.table {
+            f(proc);
+        }
     }
 }
 

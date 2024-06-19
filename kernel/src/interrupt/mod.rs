@@ -62,14 +62,40 @@ extern "x86-interrupt" fn timer_interrupt(stack_frame: InterruptStackFrame) {
         // r11 = [sp + 64]
 
         if process::READY {
+            let mut context = Context::new();
+
+            asm!(
+                "mov {rdi}, [rsp + 272 + 32]",
+                "mov {rsp}, {sp}",
+                "mov {rip}, {ip}",
+                rdi = out(reg) context.rdi,
+                rsp = out(reg) context.rsp,
+                rip = out(reg) context.rip,
+                sp = in(reg) stack_frame.stack_pointer.as_u64(),
+                ip = in(reg) stack_frame.instruction_pointer.as_u64(),
+            );
+
+            scheduler::schedule(context);
+
+            /*
             asm!(
                 // call convention
                 // rdi, rsi, rdx, rcx, r8, r9, [rsp], [rsp + 8], [rsp + 16]
 
-//                            rdi       rsi       rdx       rcx       r8        r9        [rsp]     [rsp + 8] [rsp + 16]
-// pub extern "C" fn schedule(rdi: i64, rsi: i64, rdx: i64, rcx: i64, rbp: i64, rsp: i64, rbx: i64, rax: i64, rip: i64) {
+//                            rdi       rsi       rdx       rcx       r8        r9        rsp       rsp + 8   rsp + 16  sp + 24  rsp + 32 rsp + 40  rsp + 48
+// pub extern "C" fn schedule(rdi: i64, rsi: i64, rdx: i64, rcx: i64, rbp: i64, rsp: i64, rbx: i64, rax: i64, rip: i64, r8: i64, r9: i64, r10: i64, r11: i64) {
+                // "mov [rsp - 8], {ip}",
+                "mov [rsp - 40], {ip}",
 
-                "mov [rsp - 8], {ip}",
+                "mov rdi, [rsp + 176 + 40]",
+                "mov rsi, [rsp + 176 + 48]",
+                "mov rdx, [rsp + 176 + 56]",
+                "mov rcx, [rsp + 176 + 64]",
+
+                "mov [rsp - 32], rdi",
+                "mov [rsp - 24], rsi",
+                "mov [rsp - 16], rdx",
+                "mov [rsp - 8], rcx",
 
                 "mov rdi, [rsp + 176 + 32]",
                 "mov rsi, [rsp + 176 + 24]",
@@ -80,22 +106,25 @@ extern "x86-interrupt" fn timer_interrupt(stack_frame: InterruptStackFrame) {
 
                 "mov rax, [rsp + 176]",
 
-                "sub rsp, 24",
-
-                "mov [rsp], rbx",
+                // "sub rsp, 24",
+                "sub rsp, 56",
 
                 "mov [rsp + 8], rax",
+
+                "mov [rsp], rbx",
 
                 // we may need this for debugging later
                 // "mov [rsp + 16], {ip}",
 
                 "call schedule",
 
-                "add rsp, 24",
+                // "add rsp, 24",
+                "add rsp, 56",
 
                 sp = in(reg) stack_frame.stack_pointer.as_u64(),
                 ip = in(reg) stack_frame.instruction_pointer.as_u64(),
             );
+            */
 
             PICS.lock().notify_end_of_interrupt(32);
 
@@ -121,13 +150,12 @@ extern "x86-interrupt" fn timer_interrupt(stack_frame: InterruptStackFrame) {
                 rflags = in(reg) stack_frame.cpu_flags.bits(),
                 // for some reason the stack pointer is always decremented by 8 bytes so we need to
                 // increment it by 8 just to stop it from overflowing
-                new_stack_pointer = in(reg) stack_frame.stack_pointer.as_u64() + 8,
+                // new_stack_pointer = in(reg) stack_frame.stack_pointer.as_u64(),
                 // TODO: this also crashes because rsp is set to 0 when we first start
-                // new_stack_pointer = in(reg) scheduler::NEXT_PROCESS.context.rsp,
+                new_stack_pointer = in(reg) scheduler::NEXT_PROCESS.context.rsp,
                 code_segment = in(reg) stack_frame.code_segment.0,
                 stack_segment = in(reg) stack_frame.stack_segment.0,
                 instruction_pointer = in(reg) scheduler::next_process as u64,
-                // rsp = in(reg) NEXT_PROCESS.context.rsp,
             );
         } else {
             PICS.lock().notify_end_of_interrupt(32);
@@ -150,8 +178,9 @@ extern "x86-interrupt" fn keyboard_interrupt(_stack_frame: InterruptStackFrame) 
     }
 }
 
+#[no_mangle]
 extern "x86-interrupt" fn double_fault(stack_frame: InterruptStackFrame, error_code: u64) -> ! {
-    debug::write(format_args!("[debug] double fault: {:#?}\n", stack_frame));
+    debug::write(format_args!("[debug] double fault: {:#?}\nerror_code: {}\n", stack_frame, error_code));
 
     if let Some(tty) = unsafe { KERNEL_TTY.lock().as_mut() } {
         tty.clear();
