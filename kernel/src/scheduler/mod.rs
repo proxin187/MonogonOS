@@ -11,12 +11,14 @@ pub static mut NEXT_PROCESS: Process = Process::new();
 
 pub struct Scheduler {
     current_pid: usize,
+    initialized: bool,
 }
 
 impl Scheduler {
     pub const fn new() -> Scheduler {
         Scheduler {
             current_pid: 0,
+            initialized: false,
         }
     }
 
@@ -35,13 +37,18 @@ impl Scheduler {
             let is_empty = PROCESS.lock().table.iter().all(|process| process.is_empty());
 
             if !is_empty {
-                {
+                if !self.initialized {
+                    self.initialized = true;
+                } else {
                     let mut lock = PROCESS.lock();
 
-                    if lock.table[self.current_pid].context.rip != lock.table[self.current_pid].base {
+                    // TODO: the rip is still not set correctly
+
+                    // we dont want to save context on first context switch
+                    // if lock.table[self.current_pid].context.rip != lock.table[self.current_pid].base {
                         lock.table[self.current_pid].context = context;
                         lock.table[self.current_pid].state = State::Waiting;
-                    }
+                    // }
                 }
 
                 /*
@@ -149,6 +156,7 @@ pub extern "C" fn next_process() {
             "mov rdx, {rdx}",
             "mov rsi, {rsi}",
             "mov rdi, {rdi}",
+            "mov rsp, {rsp}",
             "mov r8, {r8}",
             "mov r9, {r9}",
             "mov r10, {r10}",
@@ -161,6 +169,7 @@ pub extern "C" fn next_process() {
             rdx = in(reg) NEXT_PROCESS.context.rdx,
             rsi = in(reg) NEXT_PROCESS.context.rsi,
             rdi = in(reg) NEXT_PROCESS.context.rdi,
+            rsp = in(reg) NEXT_PROCESS.context.rsp,
             r8 = in(reg) NEXT_PROCESS.context.r8,
             r9 = in(reg) NEXT_PROCESS.context.r9,
             r10 = in(reg) NEXT_PROCESS.context.r10,

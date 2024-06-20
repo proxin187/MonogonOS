@@ -64,6 +64,7 @@ pub struct Process {
     pub state: State,
     pub context: Context,
     pub base: i64,
+    pub stack: i64,
 }
 
 impl Process {
@@ -72,6 +73,7 @@ impl Process {
             state: State::Waiting,
             context: Context::new(),
             base: 0,
+            stack: 0,
         }
     }
 
@@ -101,10 +103,12 @@ impl ProcessHandler {
         self.table[self.pid].context.rsp = stack as i64;
         self.table[self.pid].context.rip = addr;
         self.table[self.pid].base = addr;
+        self.table[self.pid].stack = stack as i64;
 
         self.table[self.pid].state = State::Waiting;
 
-        self.pid += 1;
+        // TODO: this creates wierd case where it always jumps to the start.
+        // self.pid += 1;
     }
 }
 

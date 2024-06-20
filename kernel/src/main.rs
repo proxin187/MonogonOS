@@ -96,10 +96,10 @@ pub unsafe extern "C" fn proc1() {
         asm!(
             "lea rax, [rip]",
             "mov rdi, rax",
-            "call print_int",
+            // "call print_int",
 
             "mov rdi, rsp",
-            "call print_int",
+            // "call print_int",
         );
         */
 
@@ -149,6 +149,7 @@ unsafe extern "C" fn _start() -> ! {
     debug::write(format_args!("[debug] deallocated: {:x?}\n", addr2));
 
     process::spawn(proc1 as i64);
+    // process::spawn(proc1 as i64);
 
     process::READY = true;
 
