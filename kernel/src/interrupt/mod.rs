@@ -1,4 +1,4 @@
-use crate::{KERNEL_TTY, process, debug, halt, scheduler, scancodes::Scancodes, process::Context};
+use crate::{KERNEL_TTY, process, debug, halt, scheduler, syscall::Syscall, scancodes::Scancodes, process::Context};
 
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 use x86_64::instructions::port::Port;
@@ -23,6 +23,7 @@ lazy_static! {
         idt.double_fault.set_handler_fn(double_fault);
         idt[32].set_handler_fn(timer_interrupt);
         idt[33].set_handler_fn(keyboard_interrupt);
+        idt[128].set_handler_fn(syscall_interrupt);
 
         return idt;
     };
@@ -40,6 +41,32 @@ pub fn init() {
     x86_64::instructions::interrupts::enable();
 
     debug::write(format_args!("[debug] initialized\n"));
+}
+
+#[no_mangle]
+extern "x86-interrupt" fn syscall_interrupt(_stack_frame: InterruptStackFrame) {
+    unsafe {
+        x86_64::instructions::interrupts::disable();
+
+        let mut syscall = Syscall::new();
+
+        asm!(
+            "mov {rax}, [rsp + 112]",
+            "mov {rdi}, [rsp + 112 + 32]",
+            "mov {rsi}, [rsp + 112 + 24]",
+            "mov {rdx}, [rsp + 112 + 16]",
+            rax = out(reg) syscall.args[0],
+            rdi = out(reg) syscall.args[1],
+            rsi = out(reg) syscall.args[2],
+            rdx = out(reg) syscall.args[3],
+        );
+
+        syscall.perform();
+
+        PICS.lock().notify_end_of_interrupt(128);
+
+        x86_64::instructions::interrupts::enable();
+    }
 }
 
 #[no_mangle]
@@ -64,28 +91,50 @@ extern "x86-interrupt" fn timer_interrupt(stack_frame: InterruptStackFrame) {
         if process::READY {
             let mut context = Context::new();
 
+            // TODO: some registers still seem to be saved wrong
+
+            // 272
             asm!(
-                "mov {rdi}, [rsp + 272 + 32]",
-                "mov {rsi}, [rsp + 272 + 24]",
-                "mov {rdx}, [rsp + 272 + 16]",
-                "mov {rcx}, [rsp + 272 + 8]",
+                "mov {rdi}, [rsp + 512 + 32]",
+                "mov {rsi}, [rsp + 512 + 24]",
+                "mov {rdx}, [rsp + 512 + 16]",
+                "mov {rcx}, [rsp + 512 + 8]",
+                "mov {rax}, [rsp + 512]",
                 "mov {rbp}, rbp",
-                "mov {rsp}, {sp}",
                 "mov {rbx}, rbx",
-                "mov {rax}, [rsp + 272]",
-                "mov {rip}, {ip}",
                 rdi = out(reg) context.rdi,
                 rsi = out(reg) context.rsi,
                 rdx = out(reg) context.rdx,
                 rcx = out(reg) context.rcx,
-                rbp = out(reg) context.rbp,
-                rsp = out(reg) context.rsp,
-                rbx = out(reg) context.rbx,
                 rax = out(reg) context.rax,
+                rbp = out(reg) context.rbp,
+                rbx = out(reg) context.rbx,
+            );
+
+            asm!(
+                "mov {r8}, [rsp + 512 + 40]",
+                "mov {r9}, [rsp + 512 + 48]",
+                "mov {r10}, [rsp + 512 + 56]",
+                "mov {r11}, [rsp + 512 + 64]",
+                r8 = out(reg) context.r8,
+                r9 = out(reg) context.r9,
+                r10 = out(reg) context.r10,
+                r11 = out(reg) context.r11,
+            );
+
+            /*
+            asm!(
+                "mov {rsp}, {sp}",
+                "mov {rip}, {ip}",
+                rsp = out(reg) context.rsp,
                 rip = out(reg) context.rip,
                 sp = in(reg) stack_frame.stack_pointer.as_u64(),
                 ip = in(reg) stack_frame.instruction_pointer.as_u64(),
             );
+            */
+
+            context.rsp = stack_frame.stack_pointer.as_u64() as i64;
+            context.rip = stack_frame.instruction_pointer.as_u64() as i64;
 
             scheduler::schedule(context);
 

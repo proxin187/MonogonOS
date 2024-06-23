@@ -10,6 +10,8 @@
 #![feature(slice_internals)]
 #![test_runner(_test)]
 
+extern crate alloc;
+
 mod allocator;
 mod scheduler;
 mod process;
@@ -17,7 +19,10 @@ mod debug;
 mod interrupt;
 mod scancodes;
 mod tty;
+mod vfs;
+mod syscall;
 
+use vfs::ata::Ata;
 use tty::TTY;
 
 use limine::request::{FramebufferRequest, HhdmRequest, MemoryMapRequest, StackSizeRequest};
@@ -47,7 +52,6 @@ static HHDM_REQUEST: HhdmRequest = HhdmRequest::new();
 #[used]
 static STACK_SIZE: StackSizeRequest = StackSizeRequest::new().with_size(0x32000);
 
-// TODO: i think we just need to continue and develop it as a single process os
 
 #[no_mangle]
 pub extern "C" fn print_int(int: u64) {
@@ -148,10 +152,37 @@ unsafe extern "C" fn _start() -> ! {
     allocator::ALLOC.dealloc(addr2, Layout::new::<[u64; 12]>().align_to(128).unwrap());
     debug::write(format_args!("[debug] deallocated: {:x?}\n", addr2));
 
-    process::spawn(proc1 as i64);
+    /*
+    if let Err(err) = vfs::init() {
+        panic!("vfs failed to initalize: {:?}", err);
+    }
+    */
+
+    let mut ata = Ata::new();
+
+    debug::write(format_args!("[debug] ata::new() done!\n"));
+
+    if let Err(err) = ata.identify() {
+        debug::write(format_args!("[debug] failed to identify ata drive: {:?}\n", err));
+    }
+
+    debug::write(format_args!("[debug] identify done!\n"));
+
+    ata.write(0, &[69, 88]);
+
+    debug::write(format_args!("[debug] write done!\n"));
+
+    let mut sector: [u8; 512] = [0; 512];
+
+    if let Err(err) = ata.read(0, 1, sector.as_mut_ptr()) {
+        debug::write(format_args!("[debug] failed to read ata drive: {:?}\n", err));
+    }
+
+    debug::write(format_args!("[debug] sector: {:?}\n", sector));
+
     // process::spawn(proc1 as i64);
 
-    process::READY = true;
+    // process::READY = true;
 
     loop {}
 
@@ -171,9 +202,7 @@ fn panic(info: &PanicInfo) -> ! {
                 location.file(),
                 location.line(),
                 location.column()
-            )
-            .is_err()
-            {
+            ).is_err() {
                 tty.write("kernel panicked: failed to format message");
             }
         }

@@ -1,6 +1,7 @@
 use x86_64::instructions::interrupts;
 use lazy_static::lazy_static;
 use spin::Mutex;
+use x86::io;
 
 use core::fmt::{self, Write};
 
@@ -34,15 +35,15 @@ impl fmt::Write for SerialPort {
 impl SerialPort {
     pub fn init(port: u16) -> SerialPort {
         unsafe {
-            x86::io::outb(port + 1, 0x00);
-            x86::io::outb(port + 3, 0x80);
-            x86::io::outb(port, 0x03);
-            x86::io::outb(port + 1, 0x00);
-            x86::io::outb(port + 3, 0x03);
-            x86::io::outb(port + 2, 0xc7);
-            x86::io::outb(port + 4, 0x0b);
-            x86::io::outb(port + 4, 0x1e);
-            x86::io::outb(port + 4, 0x0f);
+            io::outb(port + 1, 0x00);
+            io::outb(port + 3, 0x80);
+            io::outb(port, 0x03);
+            io::outb(port + 1, 0x00);
+            io::outb(port + 3, 0x03);
+            io::outb(port + 2, 0xc7);
+            io::outb(port + 4, 0x0b);
+            io::outb(port + 4, 0x1e);
+            io::outb(port + 4, 0x0f);
         }
 
 
@@ -54,9 +55,9 @@ impl SerialPort {
     pub fn write(&self, message: &str) {
         unsafe {
             for character in message.chars() {
-                while x86::io::inb(self.port + 5) & 0x20 == 0 {}
+                while io::inb(self.port + 5) & 0x20 == 0 {}
 
-                x86::io::outb(self.port, character as u8);
+                io::outb(self.port, character as u8);
             }
         }
     }

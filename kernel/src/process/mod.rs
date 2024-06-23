@@ -8,6 +8,7 @@ pub static mut PROCESS: Mutex<ProcessHandler> = Mutex::new(ProcessHandler::new()
 pub static mut READY: bool = false;
 
 pub const PROCESS_LIMIT: usize = 20;
+pub const STACK_SIZE: usize = 100;
 
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -96,7 +97,7 @@ impl ProcessHandler {
     }
 
     pub unsafe fn spawn(&mut self, addr: i64) {
-        let stack = allocator::ALLOC.alloc(Layout::new::<[u64; 100]>());
+        let stack = allocator::ALLOC.alloc(Layout::new::<[u64; STACK_SIZE]>());
 
         self.table[self.pid] = Process::new();
 
